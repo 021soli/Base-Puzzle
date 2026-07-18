@@ -1,0 +1,1212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Base Puzzle — Onchain Match-3 Quest 🔮</title>
+    <meta name="description" content="Match gems, chase combos, and claim onchain rewards on Base. A fantasy match-3 quest built for the Base network.">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔮</text></svg>">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;700;900&display=swap');
+
+        :root {
+            --board-size: min(92vw, 400px);
+        }
+
+        * { -webkit-tap-highlight-color: transparent; }
+
+        html, body { height: 100%; }
+
+        body {
+            background: radial-gradient(circle at 50% 0%, #2e1065 0%, #020617 80%);
+            color: white;
+            font-family: 'Outfit', sans-serif;
+            touch-action: none;
+            overflow-x: hidden;
+            position: relative;
+            padding-top: max(1rem, env(safe-area-inset-top));
+            padding-bottom: max(1rem, env(safe-area-inset-bottom));
+        }
+
+        /* Floating particles background */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background-image:
+                radial-gradient(circle at 20% 30%, rgba(139, 92, 246, 0.18) 0%, transparent 22%),
+                radial-gradient(circle at 80% 70%, rgba(59, 130, 246, 0.18) 0%, transparent 22%),
+                radial-gradient(circle at 50% 90%, rgba(236, 72, 153, 0.12) 0%, transparent 25%);
+            z-index: -2;
+            pointer-events: none;
+        }
+
+        .stars {
+            position: fixed;
+            inset: 0;
+            z-index: -1;
+            pointer-events: none;
+            overflow: hidden;
+        }
+        .star {
+            position: absolute;
+            width: 3px;
+            height: 3px;
+            background: white;
+            border-radius: 50%;
+            opacity: 0.5;
+            animation: twinkle 3s ease-in-out infinite;
+        }
+        @keyframes twinkle {
+            0%, 100% { opacity: 0.15; transform: scale(1); }
+            50% { opacity: 0.8; transform: scale(1.4); }
+        }
+
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+        }
+
+        .stat-card {
+            min-width: 0;
+        }
+
+        .stat-label {
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.12em;
+            color: #94a3b8; /* explicit gray-400, not reliant on JIT class generation */
+            margin-bottom: 4px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .stat-value {
+            font-size: clamp(18px, 5.5vw, 28px);
+            font-weight: 900;
+            line-height: 1.1;
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4));
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .level-badge {
+            font-size: 10px;
+            font-weight: 900;
+            letter-spacing: 0.08em;
+            padding: 3px 9px;
+            border-radius: 999px;
+            background: rgba(168, 85, 247, 0.18);
+            border: 1px solid rgba(168, 85, 247, 0.5);
+            color: #e9d5ff;
+            white-space: nowrap;
+        }
+
+        .level-track {
+            height: 5px;
+            border-radius: 999px;
+            background: rgba(255,255,255,0.08);
+            overflow: hidden;
+        }
+
+        .level-fill {
+            height: 100%;
+            border-radius: 999px;
+            background: linear-gradient(90deg, #a855f7, #ec4899);
+            transition: width 0.4s ease-out;
+        }
+
+        .wallet-option {
+            border: 1px solid rgba(255,255,255,0.08);
+        }
+        .wallet-option:hover {
+            border-color: rgba(168, 85, 247, 0.5);
+            background: rgba(168, 85, 247, 0.08);
+        }
+
+        .brand-title {
+            font-weight: 900;
+            letter-spacing: -0.02em;
+            background: linear-gradient(135deg, #a855f7, #ec4899 50%, #6366f1);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            filter: drop-shadow(0 0 18px rgba(168, 85, 247, 0.35));
+        }
+
+        .grid-board {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            grid-template-rows: repeat(8, 1fr);
+            gap: min(1.6vw, 6px);
+            padding: 10px;
+            border-radius: 20px;
+            box-shadow: 0 0 40px rgba(139, 92, 246, 0.3), inset 0 0 20px rgba(0,0,0,0.5);
+            width: var(--board-size);
+            height: var(--board-size);
+            box-sizing: border-box;
+            position: relative;
+            overflow: hidden;
+            transition: filter 0.3s;
+        }
+
+        .candy {
+            min-height: 0;
+            min-width: 0;
+        }
+
+        .grid-board.shuffling {
+            filter: blur(1px) brightness(1.2);
+        }
+
+        .candy {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: clamp(20px, 4.2vw, 34px);
+            cursor: pointer;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.03);
+            transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.2s, opacity 0.2s;
+            user-select: none;
+            filter: drop-shadow(0 4px 6px rgba(0,0,0,0.4));
+        }
+
+        .candy:hover {
+            background: rgba(255, 255, 255, 0.08);
+            transform: scale(1.05);
+        }
+
+        .candy.selected {
+            transform: scale(1.15);
+            background: rgba(236, 72, 153, 0.2);
+            border: 2px solid #ec4899;
+            box-shadow: 0 0 25px rgba(236, 72, 153, 0.6), inset 0 0 10px rgba(236, 72, 153, 0.4);
+            z-index: 10;
+        }
+
+        .candy.pop {
+            animation: magicalPop 0.4s ease-out forwards;
+        }
+
+        .candy.dropIn {
+            animation: dropIn 0.3s ease-out;
+        }
+
+        .candy[data-special="bomb"] {
+            background: radial-gradient(circle, rgba(249,115,22,0.4), rgba(127,29,29,0.15));
+            border: 2px solid rgba(249,115,22,0.75);
+            box-shadow: 0 0 18px rgba(249,115,22,0.65), inset 0 0 10px rgba(249,115,22,0.35);
+            animation: specialPulse 1.3s ease-in-out infinite;
+        }
+
+        .candy[data-special="rainbow"] {
+            background: radial-gradient(circle, rgba(236,72,153,0.4), rgba(99,102,241,0.15));
+            border: 2px solid rgba(236,72,153,0.75);
+            box-shadow: 0 0 18px rgba(236,72,153,0.65), inset 0 0 10px rgba(236,72,153,0.35);
+            animation: specialPulse 1.3s ease-in-out infinite;
+        }
+
+        @keyframes specialPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.08); }
+        }
+
+        @keyframes magicalPop {
+            0% { transform: scale(1) rotate(0deg); filter: brightness(1); }
+            50% { transform: scale(1.5) rotate(15deg); filter: brightness(2) drop-shadow(0 0 20px #fff); }
+            100% { transform: scale(0) rotate(-15deg); opacity: 0; }
+        }
+
+        @keyframes dropIn {
+            0% { transform: translateY(-14px); opacity: 0.4; }
+            100% { transform: translateY(0); opacity: 1; }
+        }
+
+        .shiny-btn {
+            background: linear-gradient(135deg, #6366f1 0%, #a855f7 50%, #ec4899 100%);
+            background-size: 200% 200%;
+            animation: gradientShift 4s ease infinite;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        .shiny-btn:disabled, .action-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            animation: none;
+            transform: none !important;
+        }
+
+        @keyframes gradientShift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        .combo-pop {
+            animation: comboPop 0.9s ease-out forwards;
+        }
+        @keyframes comboPop {
+            0% { transform: translate(-50%, -30%) scale(0.6); opacity: 0; }
+            15% { transform: translate(-50%, -50%) scale(1.1); opacity: 1; }
+            30% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+            100% { transform: translate(-50%, -85%) scale(1); opacity: 0; }
+        }
+
+        .score-bump {
+            animation: bump 0.3s ease-out;
+        }
+        @keyframes bump {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.25); }
+            100% { transform: scale(1); }
+        }
+
+        .confetti-piece {
+            position: fixed;
+            top: -10px;
+            border-radius: 2px;
+            z-index: 50;
+            pointer-events: none;
+            animation: fall linear forwards;
+        }
+        @keyframes fall {
+            to { transform: translateY(110vh) rotate(540deg); opacity: 0.2; }
+        }
+
+        .mute-toggle {
+            width: 34px;
+            height: 34px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+    </style>
+</head>
+<body class="flex flex-col items-center justify-center min-h-screen p-4">
+
+    <div class="stars" id="stars"></div>
+
+    <!-- Header & Wallet -->
+    <div class="glass-panel w-full max-w-[400px] flex justify-between items-center mb-4 p-4 rounded-2xl relative overflow-hidden">
+        <div class="absolute top-0 left-0 w-1 h-full bg-blue-500 shadow-[0_0_15px_#3b82f6]"></div>
+        <div class="pl-2">
+            <span class="text-[10px] text-blue-400 font-bold tracking-widest flex items-center gap-1.5">
+                <span id="netDot" class="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
+                <span id="netLabel">BASE MAINNET</span>
+            </span>
+            <div id="walletAddress" class="text-sm font-mono text-gray-200 mt-0.5">Not Connected</div>
+        </div>
+        <button id="connectBtn" onclick="openWalletModal()" class="bg-blue-600 hover:bg-blue-500 text-white shadow-[0_0_15px_rgba(37,99,235,0.5)] px-5 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition-all active:scale-95">
+            Connect
+        </button>
+    </div>
+
+    <!-- Wallet Picker Modal -->
+    <div id="walletModal" class="hidden fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4" style="background: rgba(2, 6, 23, 0.75); backdrop-filter: blur(4px);">
+        <div class="glass-panel w-full max-w-[380px] rounded-2xl p-5" onclick="event.stopPropagation()">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-base font-bold">Connect a wallet</h2>
+                <button onclick="closeWalletModal()" class="text-gray-400 hover:text-white text-xl leading-none px-2" aria-label="Close">×</button>
+            </div>
+            <div id="walletList" class="space-y-2"></div>
+            <p class="text-[11px] text-gray-400 mt-4 text-center">Base Puzzle never asks for your seed phrase or private key.</p>
+        </div>
+    </div>
+
+    <!-- Title -->
+    <div class="text-center mb-4 select-none">
+        <h1 class="brand-title text-3xl leading-tight">Base Puzzle</h1>
+        <p class="text-[11px] text-gray-400 tracking-wide mt-0.5">Match gems · Chain combos · Claim your onchain quest</p>
+        <span id="levelBadge" class="level-badge inline-block mt-2">LVL 1</span>
+    </div>
+
+    <!-- Stats -->
+    <div class="flex gap-2 sm:gap-3 w-full mb-2" style="max-width: var(--board-size);">
+        <div class="glass-panel stat-card flex-1 rounded-2xl px-2 py-3 text-center">
+            <div class="stat-label">SCORE</div>
+            <div id="scoreDisplay" class="stat-value bg-gradient-to-r from-pink-400 to-purple-400">0</div>
+        </div>
+        <div class="glass-panel stat-card flex-1 rounded-2xl px-2 py-3 text-center">
+            <div class="stat-label">BEST</div>
+            <div id="highScoreDisplay" class="stat-value bg-gradient-to-r from-yellow-300 to-amber-500">0</div>
+        </div>
+        <div class="glass-panel stat-card flex-1 rounded-2xl px-2 py-3 text-center">
+            <div class="stat-label">STREAK</div>
+            <div id="streakDisplay" class="stat-value bg-gradient-to-r from-cyan-300 to-blue-400">x1</div>
+        </div>
+    </div>
+
+    <!-- Level progress -->
+    <div class="w-full mb-4" style="max-width: var(--board-size);">
+        <div class="level-track"><div id="levelBar" class="level-fill" style="width:0%"></div></div>
+    </div>
+
+    <!-- Game Board -->
+    <div class="relative">
+        <div class="glass-panel grid-board" id="board"></div>
+        <div id="comboLayer" class="absolute left-1/2 top-1/3 pointer-events-none"></div>
+    </div>
+
+    <p class="text-[10px] text-center text-gray-500 mt-3 px-4 leading-relaxed" style="max-width: var(--board-size);">
+        Match 4 in a row for a 🧨 bomb, match 5 for a 🌈 rainbow gem — swap either one into any tile to blast it.
+    </p>
+
+    <!-- Web3 Actions -->
+    <div class="mt-6 w-full space-y-3" style="max-width: var(--board-size);">
+        <button id="dailyBtn" onclick="sendDailyTransaction()" class="action-btn shiny-btn w-full py-4 rounded-2xl font-bold text-sm uppercase tracking-wider shadow-xl flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-95 transition-all text-white">
+            <span id="dailyBtnLabel">⚡ Claim Daily Boost (+500)</span>
+        </button>
+        <button id="saveBtn" onclick="saveScoreOnChain()" class="action-btn w-full glass-panel bg-emerald-900/40 hover:bg-emerald-800/60 py-3.5 rounded-2xl font-bold text-sm text-emerald-400 border border-emerald-500/30 active:scale-95 transition-all uppercase tracking-wider">
+            💾 Save Score On-Chain
+        </button>
+        <p class="text-[10px] text-center text-gray-500 leading-relaxed px-2">
+            ⓘ Demo build: these buttons send a real, tiny Base transaction to prove onchain activity — no reward contract is deployed yet, so tokens aren't actually minted or transferred.
+        </p>
+    </div>
+
+    <div class="flex items-center justify-center gap-3 mt-4">
+        <button onclick="toggleMute()" id="muteBtn" class="mute-toggle glass-panel rounded-full text-sm" title="Toggle sound">🔊</button>
+        <button onclick="requestReshuffle()" id="shuffleBtn" class="mute-toggle glass-panel rounded-full text-sm" title="Reshuffle board">🔀</button>
+    </div>
+
+    <p id="txStatus" class="text-xs text-center font-mono mt-4 min-h-[1rem] text-emerald-400 tracking-wide px-4"></p>
+
+    <script>
+        // --- BACKGROUND STARFIELD ---
+        (function initStars() {
+            const container = document.getElementById('stars');
+            const count = 40;
+            for (let i = 0; i < count; i++) {
+                const s = document.createElement('div');
+                s.className = 'star';
+                s.style.left = Math.random() * 100 + '%';
+                s.style.top = Math.random() * 100 + '%';
+                s.style.animationDelay = (Math.random() * 3) + 's';
+                s.style.animationDuration = (2 + Math.random() * 3) + 's';
+                container.appendChild(s);
+            }
+        })();
+
+        // --- SYNTH AUDIO ENGINE ---
+        let audioCtx;
+        let muted = localStorage.getItem('basepuzzle_muted') === 'true';
+        updateMuteBtn();
+
+        function toggleMute() {
+            muted = !muted;
+            localStorage.setItem('basepuzzle_muted', muted);
+            updateMuteBtn();
+        }
+        function updateMuteBtn() {
+            document.getElementById('muteBtn').textContent = muted ? '🔇' : '🔊';
+        }
+
+        function playSound(type) {
+            if (muted) return;
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+
+            const now = audioCtx.currentTime;
+
+            if (type === 'click') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(800, now);
+                osc.frequency.exponentialRampToValueAtTime(1200, now + 0.1);
+                gain.gain.setValueAtTime(0.1, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+                osc.start(now); osc.stop(now + 0.1);
+            } else if (type === 'match') {
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(400, now);
+                osc.frequency.exponentialRampToValueAtTime(800, now + 0.3);
+                gain.gain.setValueAtTime(0.15, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+                osc.start(now); osc.stop(now + 0.3);
+            } else if (type === 'error') {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(150, now);
+                osc.frequency.linearRampToValueAtTime(100, now + 0.2);
+                gain.gain.setValueAtTime(0.1, now);
+                gain.gain.linearRampToValueAtTime(0.01, now + 0.2);
+                osc.start(now); osc.stop(now + 0.2);
+            } else if (type === 'levelup') {
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(500, now);
+                osc.frequency.exponentialRampToValueAtTime(1000, now + 0.15);
+                osc.frequency.exponentialRampToValueAtTime(1400, now + 0.3);
+                gain.gain.setValueAtTime(0.12, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+                osc.start(now); osc.stop(now + 0.4);
+            }
+        }
+
+        // --- GAME ENGINE ---
+        const boardEl = document.getElementById('board');
+        const width = 8;
+        const items = ['💎', '🔮', '🌙', '🌟', '🧊', '🔥'];
+        const SPECIAL_BOMB = '🧨';
+        const SPECIAL_RAINBOW = '🌈';
+        const LEVEL_STEP = 1200;
+        let squares = [];
+        let score = 0;
+        let level = 1;
+        let highScore = parseInt(localStorage.getItem('basepuzzle_high') || '0', 10);
+        let selected = null;
+        let isProcessing = false;
+
+        function updateLevel() {
+            const newLevel = Math.floor(score / LEVEL_STEP) + 1;
+            const progress = ((score % LEVEL_STEP) / LEVEL_STEP) * 100;
+            document.getElementById('levelBar').style.width = progress + '%';
+            if (newLevel > level) {
+                level = newLevel;
+                document.getElementById('levelBadge').textContent = `LVL ${level}`;
+                showComboPopup(`⭐ LEVEL ${level}!`);
+                playSound('levelup');
+            }
+        }
+
+        function applyState(idx, state) {
+            squares[idx].innerText = state.text;
+            squares[idx].dataset.special = state.special || '';
+            if (state.rainbowTarget) {
+                squares[idx].dataset.rainbowTarget = state.rainbowTarget;
+            } else {
+                delete squares[idx].dataset.rainbowTarget;
+            }
+        }
+
+        const sleep = ms => new Promise(res => setTimeout(res, ms));
+
+        document.getElementById('highScoreDisplay').innerText = highScore;
+
+        function createBoard() {
+            boardEl.innerHTML = '';
+            squares = [];
+            for (let i = 0; i < width * width; i++) {
+                const sq = document.createElement('div');
+                sq.className = 'candy';
+                sq.dataset.index = i;
+                sq.dataset.special = '';
+                sq.innerText = items[Math.floor(Math.random() * items.length)];
+                sq.addEventListener('click', () => handleClick(sq));
+                boardEl.appendChild(sq);
+                squares.push(sq);
+            }
+            // Silent cleanup on start so the board never opens with a free match
+            clearInitialMatches();
+            if (!hasAvailableMoves()) requestReshuffle(true);
+        }
+
+        function clearInitialMatches() {
+            let hasMatches = true;
+            let guard = 0;
+            while (hasMatches && guard < 200) {
+                hasMatches = false;
+                guard++;
+                const matchResult = findMatches();
+                if (matchResult.length > 0) {
+                    hasMatches = true;
+                    matchResult.forEach(idx => {
+                        squares[idx].innerText = items[Math.floor(Math.random() * items.length)];
+                    });
+                }
+            }
+        }
+
+        // Detects whether any legal swap on the board would create a match.
+        // Without this, the board could softlock with zero possible moves.
+        function hasAvailableMoves() {
+            for (let i = 0; i < squares.length; i++) {
+                const row = Math.floor(i / width);
+                const col = i % width;
+                // try swap right
+                if (col < width - 1) {
+                    if (wouldMatch(i, i + 1)) return true;
+                }
+                // try swap down
+                if (row < width - 1) {
+                    if (wouldMatch(i, i + width)) return true;
+                }
+            }
+            return false;
+        }
+
+        function wouldMatch(i1, i2) {
+            const a = squares[i1].innerText;
+            const b = squares[i2].innerText;
+            squares[i1].innerText = b;
+            squares[i2].innerText = a;
+            const matches = findMatches();
+            squares[i1].innerText = a;
+            squares[i2].innerText = b;
+            return matches.length > 0;
+        }
+
+        async function requestReshuffle(silent = false) {
+            if (isProcessing) return;
+            isProcessing = true;
+            if (!silent) {
+                setStatus('🔀 No moves left — reshuffling the board...');
+            }
+            boardEl.classList.add('shuffling');
+            await sleep(350);
+            let guard = 0;
+            do {
+                squares.forEach(sq => {
+                    sq.innerText = items[Math.floor(Math.random() * items.length)];
+                    sq.dataset.special = '';
+                    delete sq.dataset.rainbowTarget;
+                });
+                clearInitialMatches();
+                guard++;
+            } while (!hasAvailableMoves() && guard < 50);
+            boardEl.classList.remove('shuffling');
+            if (!silent) setStatus('✨ Board reshuffled — good luck!');
+            isProcessing = false;
+        }
+
+        async function handleClick(square) {
+            if (isProcessing) return;
+            playSound('click');
+
+            if (!selected) {
+                selected = square;
+                square.classList.add('selected');
+            } else {
+                const idx1 = parseInt(selected.dataset.index);
+                const idx2 = parseInt(square.dataset.index);
+
+                selected.classList.remove('selected');
+
+                if (idx1 === idx2) {
+                    selected = null;
+                    return;
+                }
+
+                const isAdjacent = Math.abs(idx1 - idx2) === 1 || Math.abs(idx1 - idx2) === width;
+
+                // Prevent wrapping left-right edges (e.g. col 7 swapping with col 0 of next row)
+                const isEdgeWrap = (idx1 % width === 7 && idx2 % width === 0) || (idx1 % width === 0 && idx2 % width === 7);
+
+                if (isAdjacent && !isEdgeWrap) {
+                    await handleSwap(idx1, idx2);
+                } else {
+                    playSound('error');
+                }
+                selected = null;
+            }
+        }
+
+        async function handleSwap(i1, i2) {
+            isProcessing = true;
+
+            const state1 = { text: squares[i1].innerText, special: squares[i1].dataset.special, rainbowTarget: squares[i1].dataset.rainbowTarget };
+            const state2 = { text: squares[i2].innerText, special: squares[i2].dataset.special, rainbowTarget: squares[i2].dataset.rainbowTarget };
+
+            applyState(i1, state2);
+            applyState(i2, state1);
+
+            // Moving a bomb or rainbow gem detonates it immediately, match or no match.
+            const specialIdxs = [i1, i2].filter(i => squares[i].dataset.special);
+            if (specialIdxs.length > 0) {
+                await triggerSpecials(specialIdxs);
+                if (!hasAvailableMoves()) await requestReshuffle();
+                isProcessing = false;
+                return;
+            }
+
+            const matches = findMatches();
+
+            if (matches.length > 0) {
+                await processBoardState([i1, i2]);
+                if (!hasAvailableMoves()) {
+                    await requestReshuffle();
+                }
+            } else {
+                // Invalid move, revert
+                playSound('error');
+                applyState(i1, state1);
+                applyState(i2, state2);
+            }
+
+            isProcessing = false;
+        }
+
+        function specialAffectedIndices(idx) {
+            const kind = squares[idx].dataset.special;
+            const affected = new Set([idx]);
+            if (kind === 'bomb') {
+                const row = Math.floor(idx / width);
+                const col = idx % width;
+                for (let c = 0; c < width; c++) affected.add(row * width + c);
+                for (let r = 0; r < width; r++) affected.add(r * width + col);
+            } else if (kind === 'rainbow') {
+                const target = squares[idx].dataset.rainbowTarget;
+                squares.forEach((sq, i) => {
+                    if (sq.innerText === target) affected.add(i);
+                });
+            }
+            return Array.from(affected);
+        }
+
+        async function triggerSpecials(idxs) {
+            playSound('levelup');
+            const kinds = idxs.map(i => squares[i].dataset.special);
+            const affectedSet = new Set();
+            idxs.forEach(i => specialAffectedIndices(i).forEach(a => affectedSet.add(a)));
+            const affected = Array.from(affectedSet);
+
+            showComboPopup(kinds.includes('rainbow') ? '🌈 RAINBOW BLAST!' : '🧨 BOOM!');
+
+            const gained = affected.length * 20;
+            score += gained;
+            document.getElementById('scoreDisplay').innerText = score;
+            bumpScoreDisplay();
+            updateLevel();
+
+            let brokeRecord = false;
+            if (score > highScore) {
+                highScore = score;
+                localStorage.setItem('basepuzzle_high', highScore);
+                document.getElementById('highScoreDisplay').innerText = highScore;
+                brokeRecord = true;
+            }
+
+            affected.forEach(i => squares[i].classList.add('pop'));
+            await sleep(350);
+            if (brokeRecord) fireConfetti();
+
+            affected.forEach(i => {
+                applyState(i, { text: '', special: '' });
+                squares[i].classList.remove('pop');
+            });
+
+            applyGravity();
+            await sleep(250);
+
+            // Chain into whatever the blast lines up
+            await processBoardState();
+        }
+
+        function applyGravity() {
+            for (let col = 0; col < width; col++) {
+                const colIdxsBottomUp = [];
+                for (let row = width - 1; row >= 0; row--) colIdxsBottomUp.push(row * width + col);
+
+                const remaining = [];
+                colIdxsBottomUp.forEach(idx => {
+                    if (squares[idx].innerText !== '') {
+                        remaining.push({
+                            text: squares[idx].innerText,
+                            special: squares[idx].dataset.special,
+                            rainbowTarget: squares[idx].dataset.rainbowTarget
+                        });
+                    }
+                });
+
+                colIdxsBottomUp.forEach((idx, i) => {
+                    if (i < remaining.length) {
+                        applyState(idx, remaining[i]);
+                    } else {
+                        applyState(idx, { text: items[Math.floor(Math.random() * items.length)], special: '' });
+                        squares[idx].classList.add('dropIn');
+                        setTimeout(() => squares[idx].classList.remove('dropIn'), 320);
+                    }
+                });
+            }
+        }
+
+        // Scans rows/columns for runs of 4+ identical gems — these become
+        // special gems instead of just clearing (4 = bomb, 5+ = rainbow).
+        function findLongRuns() {
+            const runs = [];
+            for (let r = 0; r < width; r++) {
+                let c = 0;
+                while (c < width) {
+                    const val = squares[r * width + c].innerText;
+                    let runEnd = c;
+                    while (runEnd < width && squares[r * width + runEnd].innerText === val) runEnd++;
+                    if (val && runEnd - c >= 4) {
+                        const indices = [];
+                        for (let k = c; k < runEnd; k++) indices.push(r * width + k);
+                        runs.push({ indices, type: val });
+                    }
+                    c = runEnd;
+                }
+            }
+            for (let c = 0; c < width; c++) {
+                let r = 0;
+                while (r < width) {
+                    const val = squares[r * width + c].innerText;
+                    let runEnd = r;
+                    while (runEnd < width && squares[runEnd * width + c].innerText === val) runEnd++;
+                    if (val && runEnd - r >= 4) {
+                        const indices = [];
+                        for (let k = r; k < runEnd; k++) indices.push(k * width + c);
+                        runs.push({ indices, type: val });
+                    }
+                    r = runEnd;
+                }
+            }
+            return runs;
+        }
+
+        function findMatches() {
+            let matchedIndices = new Set();
+
+            // Horizontal
+            for (let i = 0; i < squares.length; i++) {
+                if (i % width < width - 2) {
+                    const a = squares[i].innerText;
+                    if (a && a === squares[i + 1].innerText && a === squares[i + 2].innerText) {
+                        matchedIndices.add(i).add(i + 1).add(i + 2);
+                    }
+                }
+            }
+            // Vertical
+            for (let i = 0; i < width * (width - 2); i++) {
+                const a = squares[i].innerText;
+                if (a && a === squares[i + width].innerText && a === squares[i + width * 2].innerText) {
+                    matchedIndices.add(i).add(i + width).add(i + width * 2);
+                }
+            }
+            return Array.from(matchedIndices);
+        }
+
+        function showComboPopup(text) {
+            const layer = document.getElementById('comboLayer');
+            const el = document.createElement('div');
+            el.className = 'combo-pop text-lg font-black';
+            el.style.color = '#facc15';
+            el.style.textShadow = '0 0 12px rgba(250,204,21,0.8)';
+            el.textContent = text;
+            layer.appendChild(el);
+            setTimeout(() => el.remove(), 900);
+        }
+
+        function bumpScoreDisplay() {
+            const el = document.getElementById('scoreDisplay');
+            el.classList.remove('score-bump');
+            void el.offsetWidth; // restart animation
+            el.classList.add('score-bump');
+        }
+
+        function fireConfetti() {
+            const colors = ['#a855f7', '#ec4899', '#6366f1', '#facc15', '#22d3ee'];
+            for (let i = 0; i < 60; i++) {
+                const piece = document.createElement('div');
+                piece.className = 'confetti-piece';
+                piece.style.left = Math.random() * 100 + 'vw';
+                piece.style.width = (4 + Math.random() * 5) + 'px';
+                piece.style.height = (6 + Math.random() * 8) + 'px';
+                piece.style.background = colors[Math.floor(Math.random() * colors.length)];
+                piece.style.animationDuration = (1.8 + Math.random() * 1.4) + 's';
+                document.body.appendChild(piece);
+                setTimeout(() => piece.remove(), 3400);
+            }
+        }
+
+        async function processBoardState(swapIndices = null) {
+            let matches = findMatches();
+            let chain = 0;
+            while (matches.length > 0) {
+                chain++;
+                playSound(chain > 1 ? 'levelup' : 'match');
+
+                // Runs of 4+ become special gems instead of clearing outright.
+                const longRuns = findLongRuns();
+                const specialCreations = new Map();
+                longRuns.forEach(run => {
+                    let keepIdx = run.indices[Math.floor(run.indices.length / 2)];
+                    if (swapIndices) {
+                        if (run.indices.includes(swapIndices[0])) keepIdx = swapIndices[0];
+                        else if (run.indices.includes(swapIndices[1])) keepIdx = swapIndices[1];
+                    }
+                    specialCreations.set(keepIdx, {
+                        kind: run.indices.length >= 5 ? 'rainbow' : 'bomb',
+                        sourceType: run.type
+                    });
+                });
+
+                // Update Score — chain reactions are worth progressively more
+                const gained = matches.length * 15 * chain;
+                score += gained;
+                document.getElementById('scoreDisplay').innerText = score;
+                bumpScoreDisplay();
+                updateLevel();
+
+                const streakEl = document.getElementById('streakDisplay');
+                streakEl.innerText = 'x' + chain;
+                if (chain > 1) {
+                    showComboPopup(`COMBO x${chain}! +${gained}`);
+                }
+
+                let brokeRecord = false;
+                if (score > highScore) {
+                    highScore = score;
+                    localStorage.setItem('basepuzzle_high', highScore);
+                    document.getElementById('highScoreDisplay').innerText = highScore;
+                    brokeRecord = true;
+                }
+
+                // Animate Pop
+                matches.forEach(idx => {
+                    squares[idx].classList.add('pop');
+                });
+
+                await sleep(350); // wait for pop animation
+
+                if (brokeRecord) fireConfetti();
+
+                // Clear popped items (except cells being converted into a special gem)
+                matches.forEach(idx => {
+                    squares[idx].classList.remove('pop');
+                    if (specialCreations.has(idx)) return;
+                    applyState(idx, { text: '', special: '' });
+                });
+
+                specialCreations.forEach((info, idx) => {
+                    applyState(idx, {
+                        text: info.kind === 'rainbow' ? SPECIAL_RAINBOW : SPECIAL_BOMB,
+                        special: info.kind,
+                        rainbowTarget: info.kind === 'rainbow' ? info.sourceType : ''
+                    });
+                    showComboPopup(info.kind === 'rainbow' ? '🌈 RAINBOW GEM!' : '🧨 BOMB CREATED!');
+                });
+
+                applyGravity();
+
+                await sleep(250); // wait for fall
+                matches = findMatches(); // check for chain reactions
+                swapIndices = null; // keep-priority only applies to the triggering swap
+            }
+            // Reset streak display shortly after the chain settles
+            setTimeout(() => {
+                document.getElementById('streakDisplay').innerText = 'x1';
+            }, 700);
+        }
+
+        // --- WEB3 INTEGRATION ---
+        const BASE_CHAIN_ID = '0x2105'; // Base Mainnet (8453)
+        const BASE_CHAIN_PARAMS = {
+            chainId: BASE_CHAIN_ID,
+            chainName: 'Base',
+            nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+            rpcUrls: ['https://mainnet.base.org'],
+            blockExplorerUrls: ['https://basescan.org']
+        };
+        const DAILY_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+
+        const WALLET_CATALOG = [
+            { id: 'metamask', name: 'MetaMask', icon: '🦊', match: p => !!p.isMetaMask && !p.isCoinbaseWallet, installUrl: 'https://metamask.io/download/' },
+            { id: 'coinbase', name: 'Coinbase Wallet', icon: '🔵', match: p => !!p.isCoinbaseWallet, installUrl: 'https://www.coinbase.com/wallet/downloads' },
+            { id: 'brave', name: 'Brave Wallet', icon: '🦁', match: p => !!p.isBraveWallet, installUrl: 'https://brave.com/wallet/' },
+            { id: 'rabby', name: 'Rabby Wallet', icon: '🐰', match: p => !!p.isRabby, installUrl: 'https://rabby.io/' },
+            { id: 'trust', name: 'Trust Wallet', icon: '🛡️', match: p => !!p.isTrust || !!p.isTrustWallet, installUrl: 'https://trustwallet.com/download' }
+        ];
+
+        let userAddress = null;
+        let activeProvider = null;
+        let dailyTimerHandle = null;
+
+        function setStatus(msg, error = false) {
+            const el = document.getElementById('txStatus');
+            el.textContent = msg;
+            el.className = `text-xs text-center font-mono mt-4 min-h-[1rem] tracking-wide px-4 ${error ? 'text-red-400' : 'text-emerald-400'}`;
+        }
+
+        function setBtnBusy(btn, busy, busyLabel) {
+            if (busy) {
+                btn.dataset.originalHtml = btn.innerHTML;
+                btn.innerHTML = `<span>${busyLabel}</span>`;
+                btn.disabled = true;
+            } else {
+                if (btn.dataset.originalHtml) btn.innerHTML = btn.dataset.originalHtml;
+                btn.disabled = false;
+            }
+        }
+
+        // Some browsers expose several injected wallets at once via window.ethereum.providers
+        // (EIP-5749 style multi-injection). Fall back to the single window.ethereum otherwise.
+        function getInjectedProviders() {
+            if (window.ethereum?.providers?.length) return window.ethereum.providers;
+            if (window.ethereum) return [window.ethereum];
+            return [];
+        }
+
+        function detectWallets() {
+            const providers = getInjectedProviders();
+            const detected = [];
+            const usedProviders = new Set();
+
+            WALLET_CATALOG.forEach(entry => {
+                const provider = providers.find(p => entry.match(p));
+                if (provider) {
+                    detected.push({ ...entry, provider, installed: true });
+                    usedProviders.add(provider);
+                }
+            });
+
+            // Any remaining injected provider that didn't match a known wallet (e.g. an
+            // unlisted extension) still gets offered as a generic "Browser Wallet" option.
+            providers.forEach(p => {
+                if (!usedProviders.has(p)) {
+                    detected.push({ id: 'injected', name: 'Browser Wallet', icon: '👛', provider: p, installed: true });
+                }
+            });
+
+            // Offer install links for the two most common wallets if neither is present,
+            // so the picker is useful even with no extension installed yet.
+            ['metamask', 'coinbase'].forEach(id => {
+                if (!detected.some(w => w.id === id)) {
+                    const entry = WALLET_CATALOG.find(w => w.id === id);
+                    detected.push({ ...entry, provider: null, installed: false });
+                }
+            });
+
+            return detected;
+        }
+
+        function openWalletModal() {
+            playSound('click');
+            const wallets = detectWallets();
+            const list = document.getElementById('walletList');
+            list.innerHTML = '';
+            wallets.forEach(w => {
+                const row = document.createElement('button');
+                row.className = 'wallet-option glass-panel w-full flex items-center gap-3 p-3 rounded-xl text-left transition-all active:scale-95';
+                row.innerHTML = `
+                    <span class="text-2xl">${w.icon}</span>
+                    <span class="flex-1">
+                        <span class="block text-sm font-bold">${w.name}</span>
+                        <span class="block text-[11px] ${w.installed ? 'text-emerald-400' : 'text-gray-400'}">${w.installed ? 'Detected' : 'Not installed — tap to get it'}</span>
+                    </span>
+                `;
+                row.onclick = () => w.installed ? selectWallet(w) : window.open(w.installUrl, '_blank');
+                list.appendChild(row);
+            });
+            document.getElementById('walletModal').classList.remove('hidden');
+        }
+
+        function closeWalletModal() {
+            document.getElementById('walletModal').classList.add('hidden');
+        }
+
+        document.getElementById('walletModal').addEventListener('click', closeWalletModal);
+        document.addEventListener('keydown', e => {
+            if (e.key === 'Escape') closeWalletModal();
+        });
+
+        async function selectWallet(wallet) {
+            closeWalletModal();
+            const btn = document.getElementById('connectBtn');
+            setBtnBusy(btn, true, '...');
+            try {
+                const acc = await wallet.provider.request({ method: 'eth_requestAccounts' });
+                activeProvider = wallet.provider;
+                userAddress = acc[0];
+                document.getElementById('walletAddress').innerText =
+                    `${wallet.icon} ${userAddress.slice(0, 6)}...${userAddress.slice(-4)}`;
+
+                const onBaseNetwork = await ensureBaseNetwork();
+                if (onBaseNetwork) {
+                    btn.textContent = 'Disconnect';
+                    btn.onclick = disconnectWallet;
+                    setBtnBusy(btn, false);
+                    setStatus(`✅ ${wallet.name} connected on Base`);
+                } else {
+                    setBtnBusy(btn, false);
+                    setStatus("⚠️ Connected, but couldn't switch to Base — switch manually in your wallet", true);
+                }
+
+                activeProvider.on?.('accountsChanged', handleAccountsChanged);
+                activeProvider.on?.('chainChanged', handleChainChanged);
+                refreshDailyButtonState();
+            } catch (e) {
+                setBtnBusy(btn, false);
+                setStatus("❌ Connection request was rejected", true);
+            }
+        }
+
+        function disconnectWallet() {
+            playSound('click');
+            userAddress = null;
+            activeProvider = null;
+            document.getElementById('walletAddress').innerText = 'Not Connected';
+            const btn = document.getElementById('connectBtn');
+            btn.textContent = 'Connect';
+            btn.onclick = openWalletModal;
+            refreshDailyButtonState();
+            setStatus("🔌 Wallet disconnected");
+        }
+
+        async function ensureBaseNetwork() {
+            try {
+                await activeProvider.request({
+                    method: 'wallet_switchEthereumChain',
+                    params: [{ chainId: BASE_CHAIN_ID }]
+                });
+                return true;
+            } catch (switchError) {
+                // 4902 = chain not added to wallet yet, so add it and retry
+                if (switchError && switchError.code === 4902) {
+                    try {
+                        await activeProvider.request({
+                            method: 'wallet_addEthereumChain',
+                            params: [BASE_CHAIN_PARAMS]
+                        });
+                        return true;
+                    } catch (addError) {
+                        return false;
+                    }
+                }
+                return false;
+            }
+        }
+
+        function handleAccountsChanged(accounts) {
+            if (!accounts || accounts.length === 0) {
+                disconnectWallet();
+            } else {
+                userAddress = accounts[0];
+                document.getElementById('walletAddress').innerText =
+                    `${userAddress.slice(0, 6)}...${userAddress.slice(-4)}`;
+            }
+            refreshDailyButtonState();
+        }
+
+        function handleChainChanged(chainId) {
+            const onBase = chainId === BASE_CHAIN_ID;
+            document.getElementById('netLabel').textContent = onBase ? 'BASE MAINNET' : 'WRONG NETWORK';
+            document.getElementById('netDot').className = `w-2 h-2 rounded-full ${onBase ? 'bg-blue-500' : 'bg-red-500'} animate-pulse`;
+        }
+
+        function dailyKey() {
+            return userAddress ? `basepuzzle_daily_${userAddress.toLowerCase()}` : null;
+        }
+
+        function refreshDailyButtonState() {
+            if (dailyTimerHandle) clearInterval(dailyTimerHandle);
+            const btn = document.getElementById('dailyBtn');
+            const label = document.getElementById('dailyBtnLabel');
+            const key = dailyKey();
+            if (!key) {
+                btn.disabled = false;
+                label.textContent = '⚡ Claim Daily Boost (+500)';
+                return;
+            }
+            const lastClaim = parseInt(localStorage.getItem(key) || '0', 10);
+            const remaining = DAILY_COOLDOWN_MS - (Date.now() - lastClaim);
+            if (remaining <= 0) {
+                btn.disabled = false;
+                label.textContent = '⚡ Claim Daily Boost (+500)';
+                return;
+            }
+            btn.disabled = true;
+            const tick = () => {
+                const left = DAILY_COOLDOWN_MS - (Date.now() - lastClaim);
+                if (left <= 0) {
+                    clearInterval(dailyTimerHandle);
+                    btn.disabled = false;
+                    label.textContent = '⚡ Claim Daily Boost (+500)';
+                    return;
+                }
+                const h = Math.floor(left / 3600000);
+                const m = Math.floor((left % 3600000) / 60000);
+                const s = Math.floor((left % 60000) / 1000);
+                label.textContent = `⏳ Next boost in ${h}h ${m}m ${s}s`;
+            };
+            tick();
+            dailyTimerHandle = setInterval(tick, 1000);
+        }
+
+        async function sendDailyTransaction() {
+            playSound('click');
+            if (!userAddress) return setStatus("⚠️ Connect your wallet first", true);
+            const key = dailyKey();
+            const lastClaim = parseInt(localStorage.getItem(key) || '0', 10);
+            if (Date.now() - lastClaim < DAILY_COOLDOWN_MS) {
+                return setStatus("⏳ Your daily boost is still on cooldown", true);
+            }
+
+            const btn = document.getElementById('dailyBtn');
+            setBtnBusy(btn, true, '⏳ Confirm in wallet...');
+            try {
+                setStatus("⏳ Awaiting confirmation...");
+                const tx = await activeProvider.request({
+                    method: 'eth_sendTransaction',
+                    params: [{
+                        from: userAddress,
+                        to: userAddress,
+                        value: '0x0'
+                    }]
+                });
+                score += 500;
+                document.getElementById('scoreDisplay').innerText = score;
+                bumpScoreDisplay();
+                updateLevel();
+                localStorage.setItem(key, Date.now().toString());
+                setStatus(`✅ Daily boost claimed! Tx: ${tx.slice(0, 10)}...`);
+                playSound('levelup');
+            } catch {
+                setStatus("❌ Transaction was cancelled", true);
+                playSound('error');
+            } finally {
+                setBtnBusy(btn, false);
+                refreshDailyButtonState();
+            }
+        }
+
+        async function saveScoreOnChain() {
+            playSound('click');
+            if (!userAddress) return setStatus("⚠️ Connect your wallet first", true);
+            if (score === 0) return setStatus("⚠️ Play a few rounds to earn a score first", true);
+
+            const btn = document.getElementById('saveBtn');
+            setBtnBusy(btn, true, '⏳ Confirm in wallet...');
+            try {
+                setStatus("⏳ Signing score payload...");
+                // Demo payload only — no real contract is deployed for this free-tier build.
+                const data = "0xb33405d5" + score.toString(16).padStart(64, '0');
+                const tx = await activeProvider.request({
+                    method: 'eth_sendTransaction',
+                    params: [{
+                        from: userAddress,
+                        to: "0x000000000000000000000000000000000000dEaD",
+                        data
+                    }]
+                });
+                setStatus(`✅ Score saved on-chain! Tx: ${tx.slice(0, 10)}...`);
+                playSound('levelup');
+            } catch (e) {
+                setStatus("❌ Failed to save score", true);
+                playSound('error');
+            } finally {
+                setBtnBusy(btn, false);
+            }
+        }
+
+        // Initialize
+        createBoard();
+        refreshDailyButtonState();
+    </script>
+</body>
+</html>
